@@ -13,7 +13,6 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 
 public class URLImage
@@ -22,19 +21,18 @@ public class URLImage
     private static final int ONLY_R_MASK = ~EXCEPT_R_MASK;
     private static final int EXCEPT_B_MASK = 0xFFFFFF00;
     private static final int ONLY_B_MASK = ~EXCEPT_B_MASK;
-    private NativeImage urlImage;
-    private NativeImageBackedTexture urlTexture;
-    private Identifier urlID;
-    private int width;
-    private int height;
-    private static MinecraftClient client;
+    private final NativeImage urlImage;
+    private final NativeImageBackedTexture urlTexture;
+    private final Identifier urlID;
+    private final int width;
+    private final int height;
     public static final Logger LOGGER = LogManager.getLogger("Blockify");
 
     public URLImage(int width, int height)
     {
         this.width = width;
         this.height = height;
-        client = MinecraftClient.getInstance();
+        MinecraftClient client = MinecraftClient.getInstance();
         urlImage = new NativeImage(NativeImage.Format.RGBA, width, height, false);
         urlTexture = new NativeImageBackedTexture(urlImage);
         urlID = client.getTextureManager().registerDynamicTexture("urlimage", urlTexture);
@@ -57,7 +55,6 @@ public class URLImage
                     {
                         if (y < img.getHeight())
                         {
-                            //urlImage.setPixelColor(x, y, getABRGfromARGB(img.getRGB(x, y)));
                             urlImage.setColor(x, y, getABRGfromARGB(img.getRGB(x, y)));
                         }
                         else

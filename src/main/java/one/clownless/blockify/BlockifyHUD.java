@@ -1,12 +1,12 @@
 package one.clownless.blockify;
 
+import net.minecraft.client.gui.DrawContext;
 import one.clownless.blockify.util.RenderUtil;
 import one.clownless.blockify.util.SpotifyUtil;
 import one.clownless.blockify.util.URLImage;
 import eu.midnightdust.lib.util.MidnightColorUtil;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.resource.language.I18n;
 import net.minecraft.text.OrderedText;
@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 public class BlockifyHUD
 {
     private static MinecraftClient client;
+    private static DrawContext drawContext;
     private static MatrixStack matrixStack;
     private static int scaledWidth;
     private static int scaledHeight;
@@ -44,15 +45,17 @@ public class BlockifyHUD
         scaledHeight = client.getWindow().getScaledHeight();
         albumImage = new URLImage(300, 300);
         fontRenderer = client.textRenderer;
-        int ticks = 0;
         hudInfo = new String[7];
         prevImage = "empty";
         progressMS = 0;
         durationMS = -1;
     }
 
-    public static void draw(MatrixStack matrixStack)
+    public static void draw(DrawContext drawContext)
     {
+        BlockifyHUD.drawContext = drawContext;
+        TextRenderer textRenderer = MinecraftClient.getInstance().inGameHud.getTextRenderer();
+        BlockifyHUD.matrixStack = drawContext.getMatrices();
         matrixStack.push();
         if (hudInfo[1] == null || isHidden)
         {
@@ -65,14 +68,13 @@ public class BlockifyHUD
             percentProgress = 0;
         }
 
-        BlockifyHUD.matrixStack = matrixStack;
         matrixStack.translate((BlockifyConfig.anchor == BlockifyConfig.Anchor.TOP_LEFT || BlockifyConfig.anchor == BlockifyConfig.Anchor.BOTTOM_LEFT) ? BlockifyConfig.posX : scaledWidth - 185 - BlockifyConfig.posX,
                 (BlockifyConfig.anchor == BlockifyConfig.Anchor.TOP_LEFT || BlockifyConfig.anchor == BlockifyConfig.Anchor.TOP_RIGHT) ? BlockifyConfig.posY : scaledHeight - 55 - BlockifyConfig.posY, 0);
         matrixStack.scale((float) BlockifyConfig.scale, (float) BlockifyConfig.scale,1);
         scaledWidth = client.getWindow().getScaledWidth();
         scaledHeight = client.getWindow().getScaledHeight();
         int textOffset = 55;
-        if ((BlockifyConfig.drawCover) && hudInfo[4] != null && (!prevImage.equals(hudInfo[4]) && !hudInfo[4].equals("")))
+        if ((BlockifyConfig.drawCover) && hudInfo[4] != null && (!prevImage.equals(hudInfo[4]) && !hudInfo[4].isEmpty()))
         {
             LOGGER.info("Drawing new album cover.");
             albumImage.setImage(hudInfo[4]);
@@ -81,8 +83,6 @@ public class BlockifyHUD
 
         if (hudInfo[4] != null && (BlockifyConfig.drawCover))
         {
-            drawRectangle(5, 5, 50, 50, new Color(0,0,0,150));
-            RenderUtil.drawTexture(matrixStack, albumImage, 5, 5, .15F);
             textOffset = 0;
         }
 
@@ -90,45 +90,50 @@ public class BlockifyHUD
         drawRectangle(60 - textOffset, 48, 180 - textOffset, 50, MidnightColorUtil.hex2Rgb(BlockifyConfig.barColor).darker().darker());
         drawRectangle(60 - textOffset, 48, (float) (60 + (120 * percentProgress)) - textOffset, 50, MidnightColorUtil.hex2Rgb(BlockifyConfig.barColor));
 
+        if (hudInfo[4] != null && (BlockifyConfig.drawCover))
+        {
+            drawRectangle(5, 5, 50, 50, new Color(0,0,0,150));
+            RenderUtil.drawTexture(drawContext, albumImage, 5, 5, .15F);
+        }
+
         List<OrderedText> nameWrap = fontRenderer.wrapLines(StringVisitable.plain(hudInfo[0]), 125);
         int yOffset = 0;
         if (nameWrap.size() > 1)
         {
-            fontRenderer.drawWithShadow(matrixStack, nameWrap.get(0), 60 - textOffset, 5, MidnightColorUtil.hex2Rgb(BlockifyConfig.titleColor).getRGB());
-            fontRenderer.drawWithShadow(matrixStack, nameWrap.get(1), 60 - textOffset, 18, MidnightColorUtil.hex2Rgb(BlockifyConfig.titleColor).getRGB());
+            drawContext.drawTextWithShadow(textRenderer, nameWrap.get(0), 60 - textOffset, 5, MidnightColorUtil.hex2Rgb(BlockifyConfig.titleColor).getRGB());
+            drawContext.drawTextWithShadow(textRenderer, nameWrap.get(1), 60 - textOffset, 18, MidnightColorUtil.hex2Rgb(BlockifyConfig.titleColor).getRGB());
             yOffset = 15;
         }
         else
         {
-            fontRenderer.drawWithShadow(matrixStack, nameWrap.get(0), 60 - textOffset, 5, MidnightColorUtil.hex2Rgb(BlockifyConfig.titleColor).getRGB());
+            drawContext.drawTextWithShadow(textRenderer, nameWrap.get(0), 60 - textOffset, 5, MidnightColorUtil.hex2Rgb(BlockifyConfig.titleColor).getRGB());
         }
         matrixStack.scale(.5F, .5F, .5F);
 
         List<OrderedText> artistWrap = fontRenderer.wrapLines(StringVisitable.plain(hudInfo[1]), 140);
-        int artistYOffset = 0;
         if (artistWrap.size() > 1)
         {
-            fontRenderer.drawWithShadow(matrixStack, artistWrap.get(0), 120 - (textOffset * 2), 44 + yOffset, MidnightColorUtil.hex2Rgb(BlockifyConfig.artistColor).getRGB());
-            fontRenderer.drawWithShadow(matrixStack, artistWrap.get(1), 120 - (textOffset * 2), 57 + yOffset, MidnightColorUtil.hex2Rgb(BlockifyConfig.artistColor).getRGB());
-            artistYOffset = 15;
+            drawContext.drawTextWithShadow(textRenderer, artistWrap.get(0), 120 - (textOffset * 2), 44 + yOffset, MidnightColorUtil.hex2Rgb(BlockifyConfig.artistColor).getRGB());
+            drawContext.drawTextWithShadow(textRenderer, artistWrap.get(1), 120 - (textOffset * 2), 57 + yOffset, MidnightColorUtil.hex2Rgb(BlockifyConfig.artistColor).getRGB());
         }
         else
         {
-            fontRenderer.drawWithShadow(matrixStack, artistWrap.get(0), 120 - (textOffset * 2), 44 + yOffset, MidnightColorUtil.hex2Rgb(BlockifyConfig.artistColor).getRGB());
+            drawContext.drawTextWithShadow(textRenderer, artistWrap.get(0), 120 - (textOffset * 2), 44 + yOffset, MidnightColorUtil.hex2Rgb(BlockifyConfig.artistColor).getRGB());
         }
         String progressText = (progressMS / (1000 * 60)) + ":" + String.format("%02d", (progressMS / 1000 % 60));
         String durationText = (durationMS / (1000 * 60)) + ":" + String.format("%02d ", (durationMS / 1000 % 60)) + I18n.translate("blockify.hud.volume") + ": " + hudInfo[6];
 
-        fontRenderer.drawWithShadow(matrixStack, progressText, 120 - (textOffset * 2), 85, MidnightColorUtil.hex2Rgb(BlockifyConfig.timeColor).getRGB());
-        fontRenderer.drawWithShadow(matrixStack, durationText, 360 - (fontRenderer.getWidth(durationText)) - (textOffset * 2), 85, MidnightColorUtil.hex2Rgb(BlockifyConfig.timeColor).getRGB());
+        drawContext.drawTextWithShadow(textRenderer, progressText, 120 - (textOffset * 2), 85, MidnightColorUtil.hex2Rgb(BlockifyConfig.timeColor).getRGB());
+        drawContext.drawTextWithShadow(textRenderer, durationText, 360 - (fontRenderer.getWidth(durationText)) - (textOffset * 2), 85, MidnightColorUtil.hex2Rgb(BlockifyConfig.timeColor).getRGB());
         matrixStack.scale(2F, 2F, 2F);
         matrixStack.scale(1,1,1);
         matrixStack.pop();
+
     }
 
     public static void drawRectangle(float x1, float y1, float x2, float y2, Color color)
     {
-        InGameHud.fill(matrixStack, (int) (x1), (int) (y1), (int) (x2), (int) (y2), color.getRGB());
+        drawContext.fill((int) (x1), (int) (y1), (int) (x2), (int) (y2), color.getRGB());
     }
 
     public static void updateData(String[] data)

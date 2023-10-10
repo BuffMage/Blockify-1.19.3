@@ -26,26 +26,23 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 import java.util.Scanner;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
 public class SpotifyUtil
 {
-    private static String client_id = "d34978659f8940e9bfce52d124539feb";
-    private static String challenge;
+    private static final String client_id = "d34978659f8940e9bfce52d124539feb";
     private static String verifier;
     private static String authCode;
     private static String accessToken;
     private static String refreshToken;
-    private static String tokenAddress = "https://accounts.spotify.com/api/token";
-    private static String playerAddress = "https://api.spotify.com/v1/me/player/";
+    private static final String tokenAddress = "https://accounts.spotify.com/api/token";
+    private static final String playerAddress = "https://api.spotify.com/v1/me/player/";
     private static HttpClient client;
     private static HttpServer authServer;
     private static ThreadPoolExecutor threadPoolExecutor;
     private static HttpRequest playbackRequest;
-    private static HttpResponse<String> playbackResponse;
     private static File authFile;
     private static boolean isAuthorized = false;
     private static boolean isPlaying = false;
@@ -61,19 +58,25 @@ public class SpotifyUtil
         {
             if (!authFile.exists())
             {
-                authFile.createNewFile();
-                LOGGER.info("Created new token file at: " + authFile.getAbsolutePath());
-                accessToken = "";
-                refreshToken = "";
-                isAuthorized = false;
+                if (authFile.createNewFile())
+                {
+                    LOGGER.info("Created new token file at: " + authFile.getAbsolutePath());
+                    accessToken = "";
+                    refreshToken = "";
+                    isAuthorized = false;
+                }
+                else
+                {
+                    LOGGER.info("Unable to create new token file");
+                }
             }
             else
             {
                 Scanner scan = new Scanner(authFile);
-                JsonObject authJson = null;
+                JsonObject authJson;
                 if (scan.hasNextLine())
                 {
-                    authJson = new JsonParser().parse(scan.nextLine()).getAsJsonObject();
+                    authJson = JsonParser.parseString(scan.nextLine()).getAsJsonObject();
                     accessToken = authJson.get("access_token").getAsString();
                     refreshToken = authJson.get("refresh_token").getAsString();
                     isAuthorized = true;
@@ -108,8 +111,9 @@ public class SpotifyUtil
             authURI.append("%20user-modify-playback-state");
             authURI.append("&code_challenge_method=S256");
             verifier = PKCEUtil.generateCodeVerifier();
-            challenge = PKCEUtil.generateCodeChallenge(verifier);
-            authURI.append("&code_challenge=" + challenge);
+            String challenge = PKCEUtil.generateCodeChallenge(verifier);
+            authURI.append("&code_challenge=");
+            authURI.append(challenge);
             authServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 8001), 0);
             threadPoolExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
             authServer.setExecutor(threadPoolExecutor);
@@ -140,20 +144,23 @@ public class SpotifyUtil
 
         try
         {
-            StringBuilder accessBody = new StringBuilder();
-            accessBody.append("grant_type=authorization_code");
-            accessBody.append("&code=" + authCode);
-            accessBody.append("&redirect_uri=http%3A%2F%2Flocalhost%3A8001%2Fcallback");
-            accessBody.append("&client_id=" + client_id);
-            accessBody.append("&code_verifier=" + verifier);
+            String accessBody = "grant_type=authorization_code" +
+                    "&code=" +
+                    authCode +
+                    "&redirect_uri=http%3A%2F%2Flocalhost%3A8001%2Fcallback" +
+                    "&client_id=" +
+                    client_id +
+                    "&code_verifier=" +
+                    verifier;
             HttpRequest accessRequest = HttpRequest.newBuilder(
                     new URI(tokenAddress))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("Accept", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(accessBody.toString()))
+                    .POST(HttpRequest.BodyPublishers.ofString(accessBody))
                     .build();
             HttpResponse<String> accessResponse = client.send(accessRequest, HttpResponse.BodyHandlers.ofString());
-            JsonObject accessJson = new JsonParser().parse(accessResponse.body()).getAsJsonObject();
+            //JsonObject accessJson = new JsonParser().parse(accessResponse.body()).getAsJsonObject();
+            JsonObject accessJson = JsonParser.parseString(accessResponse.body()).getAsJsonObject();
             accessToken = accessJson.get("access_token").getAsString();
             refreshToken = accessJson.get("refresh_token").getAsString();
             updatePlaybackRequest();
@@ -169,22 +176,21 @@ public class SpotifyUtil
     {
         try
         {
-            StringBuilder refreshRequestBody = new StringBuilder();
-            refreshRequestBody.append("grant_type=refresh_token");
-            refreshRequestBody.append("&refresh_token=" + refreshToken);
-            refreshRequestBody.append("&client_id=" + client_id);
+            String refreshRequestBody = "grant_type=refresh_token" +
+                    "&refresh_token=" + refreshToken +
+                    "&client_id=" + client_id;
 
             HttpRequest refreshRequest = HttpRequest.newBuilder(
                     new URI(tokenAddress))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("Accept", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(refreshRequestBody.toString()))
+                    .POST(HttpRequest.BodyPublishers.ofString(refreshRequestBody))
                     .build();
 
             HttpResponse<String> refreshResponse = client.send(refreshRequest, HttpResponse.BodyHandlers.ofString());
             if (refreshResponse.statusCode() == 200)
             {
-                JsonObject refreshJson = new JsonParser().parse(refreshResponse.body()).getAsJsonObject();
+                JsonObject refreshJson = JsonParser.parseString(refreshResponse.body()).getAsJsonObject();
                 accessToken = refreshJson.get("access_token").getAsString();
                 refreshToken = refreshJson.get("refresh_token").getAsString();
                 updateJson();
@@ -208,11 +214,11 @@ public class SpotifyUtil
                     .header("Accept", "application/json")
                     .build();
             HttpResponse<String> devices = client.send(getDevices, HttpResponse.BodyHandlers.ofString());
-            JsonArray devicesJson = new JsonParser().parse(devices.body()).getAsJsonObject().get("devices").getAsJsonArray();
+            JsonArray devicesJson = JsonParser.parseString(devices.body()).getAsJsonObject().get("devices").getAsJsonArray();
             JsonObject currDevice;
             String computerName = InetAddress.getLocalHost().getHostName();
             String thisDeviceID = "";
-            if (devicesJson.size() == 0)
+            if (devicesJson.isEmpty())
             {
                 BlockifyHUD.setDuration(1);
                 BlockifyHUD.setProgress(0);
@@ -261,7 +267,10 @@ public class SpotifyUtil
             }
             else if (putRes.statusCode() == 403)
             {
-                MinecraftClient.getInstance().player.sendMessage(Text.of("Spotify Premium is required for this feature."));
+                if (MinecraftClient.getInstance().player != null)
+                {
+                    MinecraftClient.getInstance().player.sendMessage(Text.of("Spotify Premium is required for this feature."));
+                }
             }
             else if (putRes.statusCode() == 401)
             {
@@ -308,6 +317,7 @@ public class SpotifyUtil
             }
             else if (postRes.statusCode() == 403)
             {
+                assert MinecraftClient.getInstance().player != null;
                 MinecraftClient.getInstance().player.sendMessage(Text.of("Spotify Premium is required for this feature."));
             }
             else if (postRes.statusCode() == 401)
@@ -354,16 +364,12 @@ public class SpotifyUtil
 
     public static void playSong()
     {
-        EXECUTOR_SERVICE.execute(() -> {
-            putRequest("play");
-        });
+        EXECUTOR_SERVICE.execute(() -> putRequest("play"));
     }
 
     public static void pauseSong()
     {
-        EXECUTOR_SERVICE.execute(() -> {
-            putRequest("pause");
-        });
+        EXECUTOR_SERVICE.execute(() -> putRequest("pause"));
     }
 
     public static void playPause()
@@ -385,7 +391,7 @@ public class SpotifyUtil
         String[] results = new String[7];
         try
         {
-            playbackResponse = client.send(playbackRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> playbackResponse = client.send(playbackRequest, HttpResponse.BodyHandlers.ofString());
             if (playbackResponse.statusCode() == 429)
             {
                 results[0] = "Status Code: " + playbackResponse.statusCode();
@@ -393,7 +399,7 @@ public class SpotifyUtil
             }
             if (playbackResponse.statusCode() == 200)
             {
-                JsonObject json = (JsonObject) new JsonParser().parse(playbackResponse.body());
+                JsonObject json = JsonParser.parseString(playbackResponse.body()).getAsJsonObject();
                 if (json.get("currently_playing_type").getAsString().equals("episode"))
                 {
                     results[0] = json.get("item").getAsJsonObject().get("name").getAsString();
@@ -500,9 +506,11 @@ public class SpotifyUtil
         GameOptions options = MinecraftClient.getInstance().options;
         if (!isPlaying()) {
             options.getSoundVolumeOption(SoundCategory.MUSIC).setValue(BlockifyConfig.inGameMusicVolume);
+            assert MinecraftClient.getInstance().player != null;
             MinecraftClient.getInstance().player.sendMessage(Text.of("In-game music is now enabled"));
         } else {
             options.getSoundVolumeOption(SoundCategory.MUSIC).setValue(0.0d);
+            assert MinecraftClient.getInstance().player != null;
             MinecraftClient.getInstance().player.sendMessage(Text.of("In-game music is now disabled"));
         }
         options.write();

@@ -1,6 +1,7 @@
 package one.clownless.blockify.util;
 
-import java.io.UnsupportedEncodingException;
+
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -15,7 +16,6 @@ import java.util.Base64;
 public class PKCEUtil
 {
     public static String generateCodeVerifier()
-            throws UnsupportedEncodingException
     {
         SecureRandom secureRandom = new SecureRandom();
         byte[] codeVerifier = new byte[32];
@@ -26,11 +26,9 @@ public class PKCEUtil
     }
 
 
-    public static String generateCodeChallenge(String codeVerifier)
-            throws UnsupportedEncodingException,
-            NoSuchAlgorithmException
+    public static String generateCodeChallenge(String codeVerifier) throws NoSuchAlgorithmException
     {
-        byte[] bytes = codeVerifier.getBytes("US-ASCII");
+        byte[] bytes = codeVerifier.getBytes(StandardCharsets.US_ASCII);
         MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
         messageDigest.update(bytes, 0, bytes.length);
         byte[] digest = messageDigest.digest();

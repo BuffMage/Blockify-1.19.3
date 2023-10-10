@@ -14,6 +14,7 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.util.Util;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
 
@@ -37,7 +38,6 @@ public class BlockifyMain implements ModInitializer
     private boolean increaseVolumeKeyPrevState = false;
     private boolean decreaseVolumeKeyPrevState = false;
     private boolean toggleInGameMusicKeyPrevState = false;
-    private static Thread requestThread;
 
     public static final Logger LOGGER = LogManager.getLogger("Blockify");
 
@@ -46,40 +46,7 @@ public class BlockifyMain implements ModInitializer
     {
         LOGGER.info("[Blockify] Successfully loaded");
         BlockifyConfig.init("blockify", BlockifyConfig.class);
-        requestThread = new Thread()
-        {
-            public void run()
-            {
-                while (true)
-                    try {
-                        Thread.sleep(1000);
-                        if (MinecraftClient.getInstance().world != null) {
-                            if (BlockifyHUD.getDuration() < BlockifyHUD.getProgress()) {
-                                Thread.sleep(1000);
-                                String[] data = SpotifyUtil.getPlaybackInfo();
-                                if (data[0] != null && data[0].equals("Status Code: 204")) {
-                                    SpotifyUtil.refreshActiveSession();
-                                } else if (data[0] != null && data[0].equals("Status Code: 429")) {
-                                    Thread.sleep(3000);
-                                } else if (data[0] != null && data[0].equals("Reset")) {
-                                    LOGGER.info("Reset condition, maintaining HUD until reset");
-                                } else {
-                                    BlockifyHUD.updateData(data);
-                                }
-                            } else if (SpotifyUtil.isPlaying()) {
-                                BlockifyHUD.setProgress(BlockifyHUD.getProgress() + 1000);
-                            }
-                        } else {
-                            BlockifyHUD.setProgress(0);
-                            BlockifyHUD.setDuration(-1);
-                        }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-            }
-
-        };
-        requestThread.setName("Spotify Thread");
+        Thread requestThread = getThread();
         requestThread.start();
         SpotifyUtil.initialize();
         prevKey = KeyBindingHelper.registerKeyBinding(
@@ -174,16 +141,48 @@ public class BlockifyMain implements ModInitializer
                     }
                 }
         );
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            dispatcher.register(
-                    ClientCommandManager.literal("sharetrack").executes(context -> {
-                        var player = MinecraftClient.getInstance().player;
-                        if (player == null) { return 0; }
-                        player.sendMessage(Text.of(BlockifyHUD.hudInfo[5]));
-                        return 0;
-                    })
-            );
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+                ClientCommandManager.literal("sharetrack").executes(context -> {
+                    var player = MinecraftClient.getInstance().player;
+                    if (player == null) { return 0; }
+                    player.sendMessage(Text.of(BlockifyHUD.hudInfo[5]));
+                    return 0;
+                })
+        ));
+    }
+
+    @NotNull
+    private static Thread getThread() {
+        Thread requestThread = new Thread(() -> {
+            while (true)
+                try {
+                    Thread.sleep(1000);
+                    if (MinecraftClient.getInstance().world != null) {
+                        if (BlockifyHUD.getDuration() < BlockifyHUD.getProgress()) {
+                            Thread.sleep(1000);
+                            String[] data = SpotifyUtil.getPlaybackInfo();
+                            if (data[0] != null && data[0].equals("Status Code: 204")) {
+                                SpotifyUtil.refreshActiveSession();
+                            } else if (data[0] != null && data[0].equals("Status Code: 429")) {
+                                Thread.sleep(3000);
+                            } else if (data[0] != null && data[0].equals("Reset")) {
+                                LOGGER.info("Reset condition, maintaining HUD until reset");
+                            } else {
+                                BlockifyHUD.updateData(data);
+                            }
+                        } else if (SpotifyUtil.isPlaying()) {
+                            BlockifyHUD.setProgress(BlockifyHUD.getProgress() + 1000);
+                        }
+                    } else {
+                        BlockifyHUD.setProgress(0);
+                        BlockifyHUD.setDuration(-1);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
         });
+        requestThread.setName("Spotify Thread");
+        return requestThread;
     }
 
     public void playKeyHandler(boolean currPressState)
